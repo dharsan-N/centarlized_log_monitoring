@@ -1,6 +1,4 @@
-version: '3'
 services:
-
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
     environment:
@@ -8,15 +6,61 @@ services:
       - xpack.security.enabled=false
     ports:
       - "9200:9200"
+    networks:
+      - log_network
 
-  kibana:
-    image: docker.elastic.co/kibana/kibana:8.11.0
-    ports:
-      - "5601:5601"
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.11.0
+    user: root
+    volumes:
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./logs:/logs:ro
     depends_on:
       - elasticsearch
+    networks:
+      - log_network
 
-  logstash:
-    image: docker.elastic.co/logstash/logstash:8.11.0
+  ollama:
+    image: ollama/ollama
     ports:
-      - "5044:5044"
+      - "11434:11434"
+    networks:
+      - log_network
+    volumes:
+      - ollama_data:/root/.ollama
+
+  ollama-pull:
+    image: curlimages/curl:latest
+    depends_on:
+      - ollama
+    networks:
+      - log_network
+    command: >
+      sh -c "while ! curl -s http://ollama:11434/api/tags > /dev/null; do echo 'Waiting for Ollama to be available...'; sleep 5; done; echo 'Ollama is up, pulling llama3...'; curl -X POST http://ollama:11434/api/pull -d '{\"name\":\"llama3\"}'; echo 'Model pulled successfully.';"
+
+  django-app:
+    build: ./django-app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - elasticsearch
+      - ollama
+    environment:
+      - ELASTICSEARCH_HOST=http://elasticsearch:9200
+      - OLLAMA_HOST=http://ollama:11434
+    networks:
+      - log_network
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - log_network
+
+networks:
+  log_network:
+    driver: bridge
+
+volumes:
+  ollama_data:

@@ -1,0 +1,4 @@
+{"op":"set","id":1}
+{"k":"filestream::.global::fingerprint::6415daf790f75fe6bc98ea51f7db0687370ae5949369adbee4b6f4a60e71bf25","v":{"ttl":-1,"updated":[281470681743360,18446744011573954816],"cursor":null,"meta":{"source":"C:\\Users\\ABISHEAK\\Desktop\\centralized_log_monitoring\\logs\\test.log","identifier_name":"fingerprint"}}}
+{"op":"set","id":2}
+{"k":"filestream::.global::fingerprint::6415daf790f75fe6bc98ea51f7db0687370ae5949369adbee4b6f4a60e71bf25","v":{"meta":{"source":"C:\\Users\\ABISHEAK\\Desktop\\centralized_log_monitoring\\logs\\test.log","identifier_name":"fingerprint"},"ttl":-1,"updated":[1417893554680,1777288530],"cursor":{"eof":false,"offset":23657}}}
