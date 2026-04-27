@@ -1,7 +1,14 @@
+from django.shortcuts import render
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from .models import ThreatLog
 from .services import ElasticsearchService, process_and_store_logs
+
+def dashboard(request):
+    """Render the main dashboard UI"""
+    return render(request, 'dashboard.html')
+
 
 @api_view(['GET'])
 def get_logs(request):
@@ -26,6 +33,7 @@ def get_threats(request):
     ]
     return Response({"status": "success", "count": len(data), "threats": data})
 
+@csrf_exempt
 @api_view(['POST'])
 def analyze_now(request):
     """Trigger a manual analysis of recent logs"""

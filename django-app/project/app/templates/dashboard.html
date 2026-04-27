@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecOps - Log Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0e1a;--surface:#111827;--card:#1a2235;--border:#2a3450;--accent:#6366f1;--accent2:#8b5cf6;--green:#10b981;--red:#ef4444;--amber:#f59e0b;--text:#e2e8f0;--muted:#64748b;--glass:rgba(17,24,39,0.7)}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle at 30% 20%,rgba(99,102,241,0.08),transparent 50%),radial-gradient(circle at 70% 80%,rgba(139,92,246,0.06),transparent 50%);z-index:0}
+
+.app{position:relative;z-index:1;display:flex;min-height:100vh}
+
+/* Sidebar */
+.sidebar{width:260px;background:var(--glass);backdrop-filter:blur(20px);border-right:1px solid var(--border);padding:24px 16px;display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0}
+.logo{display:flex;align-items:center;gap:12px;padding:8px 12px;margin-bottom:32px}
+.logo-icon{width:40px;height:40px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff}
+.logo h1{font-size:18px;font-weight:700;background:linear-gradient(135deg,#fff,#94a3b8);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.logo span{font-size:11px;color:var(--muted);display:block;-webkit-text-fill-color:var(--muted)}
+
+.nav{flex:1;display:flex;flex-direction:column;gap:4px}
+.nav-item{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:10px;cursor:pointer;transition:all .2s;color:var(--muted);font-size:14px;font-weight:500;border:none;background:none;width:100%;text-align:left}
+.nav-item:hover{background:rgba(99,102,241,0.1);color:var(--text)}
+.nav-item.active{background:rgba(99,102,241,0.15);color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.nav-item i{width:20px;text-align:center;font-size:16px}
+
+.sidebar-footer{padding:16px;border-top:1px solid var(--border);margin-top:auto}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;animation:pulse 2s infinite;margin-right:8px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.sidebar-footer span{font-size:12px;color:var(--muted)}
+
+/* Main Content */
+.main{flex:1;margin-left:260px;padding:28px 32px}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px}
+.header h2{font-size:24px;font-weight:700}
+.header-actions{display:flex;gap:12px;align-items:center}
+.btn{padding:10px 20px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:13px;font-weight:500;transition:all .2s;display:flex;align-items:center;gap:8px;font-family:inherit}
+.btn:hover{border-color:var(--accent);box-shadow:0 0 20px rgba(99,102,241,0.15)}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#fff}
+.btn-primary:hover{box-shadow:0 4px 20px rgba(99,102,241,0.4);transform:translateY(-1px)}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important}
+
+/* Stats Cards */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px}
+.stat-card{background:var(--glass);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:16px;padding:20px 24px;transition:all .3s}
+.stat-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.stat-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.stat-value{font-size:28px;font-weight:700;margin-bottom:4px}
+.stat-sub{font-size:12px;color:var(--muted)}
+.stat-card.danger .stat-value{color:var(--red)}
+.stat-card.warn .stat-value{color:var(--amber)}
+.stat-card.ok .stat-value{color:var(--green)}
+.stat-card.info .stat-value{color:var(--accent)}
+
+/* Panels */
+.panel{background:var(--glass);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:16px;margin-bottom:24px;overflow:hidden}
+.panel-header{padding:18px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.panel-header h3{font-size:15px;font-weight:600;display:flex;align-items:center;gap:10px}
+.panel-body{padding:0;max-height:500px;overflow-y:auto}
+.panel-body::-webkit-scrollbar{width:6px}
+.panel-body::-webkit-scrollbar-track{background:transparent}
+.panel-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* Table */
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:12px 24px;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:600;background:rgba(0,0,0,0.2);position:sticky;top:0}
+td{padding:14px 24px;font-size:13px;border-bottom:1px solid rgba(42,52,80,0.5)}
+tr{transition:background .15s}
+tr:hover{background:rgba(99,102,241,0.05)}
+
+.badge{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.badge-attack{background:rgba(239,68,68,0.15);color:var(--red);border:1px solid rgba(239,68,68,0.3)}
+.badge-normal{background:rgba(16,185,129,0.15);color:var(--green);border:1px solid rgba(16,185,129,0.3)}
+
+.risk-bar{width:60px;height:6px;background:var(--border);border-radius:3px;overflow:hidden;display:inline-block;vertical-align:middle;margin-right:8px}
+.risk-fill{height:100%;border-radius:3px;transition:width .5s}
+
+/* Log entries */
+.log-entry{padding:14px 24px;border-bottom:1px solid rgba(42,52,80,0.5);font-family:'Courier New',monospace;font-size:12px;color:#94a3b8;transition:background .15s;line-height:1.6}
+.log-entry:hover{background:rgba(99,102,241,0.05)}
+.log-entry:nth-child(even){background:rgba(0,0,0,0.1)}
+
+/* Sections */
+.section{display:none}
+.section.active{display:block;animation:fadeIn .3s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* Loading Spinner */
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.empty{text-align:center;padding:48px;color:var(--muted)}
+.empty i{font-size:48px;margin-bottom:16px;display:block;opacity:.3}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;right:24px;padding:14px 24px;border-radius:12px;font-size:13px;font-weight:500;z-index:999;transform:translateY(100px);opacity:0;transition:all .3s;display:flex;align-items:center;gap:10px}
+.toast.show{transform:translateY(0);opacity:1}
+.toast-success{background:rgba(16,185,129,0.9);color:#fff;backdrop-filter:blur(10px)}
+.toast-error{background:rgba(239,68,68,0.9);color:#fff;backdrop-filter:blur(10px)}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-icon"><i class="fas fa-shield-halved"></i></div>
+      <div><h1>SecOps</h1><span>Log Monitor v1.0</span></div>
+    </div>
+    <nav class="nav">
+      <button class="nav-item active" onclick="showSection('overview')"><i class="fas fa-chart-pie"></i>Overview</button>
+      <button class="nav-item" onclick="showSection('logs')"><i class="fas fa-scroll"></i>Live Logs</button>
+      <button class="nav-item" onclick="showSection('threats')"><i class="fas fa-bug"></i>Threat Alerts</button>
+      <button class="nav-item" onclick="showSection('analyze')"><i class="fas fa-brain"></i>AI Analysis</button>
+    </nav>
+    <div class="sidebar-footer">
+      <span class="status-dot"></span><span>System Online</span>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <!-- OVERVIEW -->
+    <div class="section active" id="sec-overview">
+      <div class="header"><h2>Dashboard Overview</h2>
+        <div class="header-actions"><button class="btn" onclick="refreshAll()"><i class="fas fa-sync-alt"></i>Refresh</button></div>
+      </div>
+      <div class="stats">
+        <div class="stat-card info"><div class="stat-label">Total Logs</div><div class="stat-value" id="st-logs">—</div><div class="stat-sub">Last 60 minutes</div></div>
+        <div class="stat-card danger"><div class="stat-label">Attacks</div><div class="stat-value" id="st-attacks">—</div><div class="stat-sub">Detected threats</div></div>
+        <div class="stat-card ok"><div class="stat-label">Normal</div><div class="stat-value" id="st-normal">—</div><div class="stat-sub">Safe classifications</div></div>
+        <div class="stat-card warn"><div class="stat-label">Avg Risk</div><div class="stat-value" id="st-risk">—</div><div class="stat-sub">Risk score (0-100)</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><h3><i class="fas fa-clock" style="color:var(--accent)"></i>Recent Threat Detections</h3></div>
+        <div class="panel-body" id="overview-threats"></div>
+      </div>
+    </div>
+
+    <!-- LOGS -->
+    <div class="section" id="sec-logs">
+      <div class="header"><h2>Live Logs</h2>
+        <div class="header-actions"><button class="btn" onclick="loadLogs()"><i class="fas fa-sync-alt"></i>Refresh</button></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><h3><i class="fas fa-terminal" style="color:var(--green)"></i>Elasticsearch Logs</h3><span id="log-count" style="font-size:12px;color:var(--muted)"></span></div>
+        <div class="panel-body" id="logs-body" style="max-height:600px"></div>
+      </div>
+    </div>
+
+    <!-- THREATS -->
+    <div class="section" id="sec-threats">
+      <div class="header"><h2>Threat Alerts</h2>
+        <div class="header-actions"><button class="btn" onclick="loadThreats()"><i class="fas fa-sync-alt"></i>Refresh</button></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><h3><i class="fas fa-exclamation-triangle" style="color:var(--red)"></i>Detection History</h3></div>
+        <div class="panel-body" id="threats-body" style="max-height:600px"></div>
+      </div>
+    </div>
+
+    <!-- ANALYZE -->
+    <div class="section" id="sec-analyze">
+      <div class="header"><h2>AI Analysis</h2></div>
+      <div class="panel">
+        <div class="panel-header"><h3><i class="fas fa-robot" style="color:var(--accent2)"></i>Trigger Manual Analysis</h3></div>
+        <div style="padding:40px;text-align:center">
+          <p style="color:var(--muted);margin-bottom:24px;max-width:500px;margin-left:auto;margin-right:auto;line-height:1.7">
+            Send recent logs from Elasticsearch to the Ollama LLM for AI-based threat classification. Results will appear in the Threat Alerts section.
+          </p>
+          <button class="btn btn-primary" id="analyze-btn" onclick="runAnalysis()" style="margin:0 auto;font-size:15px;padding:14px 32px">
+            <i class="fas fa-brain"></i>Run AI Analysis
+          </button>
+          <div id="analyze-result" style="margin-top:24px"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '/api';
+
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('sec-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if (name === 'logs') loadLogs();
+  if (name === 'threats') loadThreats();
+  if (name === 'overview') refreshAll();
+}
+
+function toast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.className = 'toast toast-' + type + ' show';
+  t.innerHTML = '<i class="fas fa-' + (type === 'success' ? 'check-circle' : 'times-circle') + '"></i>' + msg;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function riskColor(score) {
+  if (score >= 70) return 'var(--red)';
+  if (score >= 40) return 'var(--amber)';
+  return 'var(--green)';
+}
+
+async function loadLogs() {
+  const body = document.getElementById('logs-body');
+  body.innerHTML = '<div class="empty"><div class="spinner"></div></div>';
+  try {
+    const r = await fetch(API + '/logs/');
+    const d = await r.json();
+    document.getElementById('log-count').textContent = d.count + ' entries';
+    if (!d.logs || d.logs.length === 0) {
+      body.innerHTML = '<div class="empty"><i class="fas fa-inbox"></i>No logs found</div>';
+      return;
+    }
+    body.innerHTML = d.logs.map(l => '<div class="log-entry">' + escapeHtml(l) + '</div>').join('');
+  } catch(e) {
+    body.innerHTML = '<div class="empty"><i class="fas fa-exclamation-circle"></i>Failed to load logs</div>';
+  }
+}
+
+async function loadThreats() {
+  const body = document.getElementById('threats-body');
+  body.innerHTML = '<div class="empty"><div class="spinner"></div></div>';
+  try {
+    const r = await fetch(API + '/threats/');
+    const d = await r.json();
+    if (!d.threats || d.threats.length === 0) {
+      body.innerHTML = '<div class="empty"><i class="fas fa-shield-check"></i>No threats detected yet</div>';
+      return;
+    }
+    body.innerHTML = buildThreatTable(d.threats);
+  } catch(e) {
+    body.innerHTML = '<div class="empty"><i class="fas fa-exclamation-circle"></i>Failed to load threats</div>';
+  }
+}
+
+function buildThreatTable(threats) {
+  let html = '<table><thead><tr><th>Time</th><th>Class</th><th>Risk</th><th>Explanation</th></tr></thead><tbody>';
+  threats.forEach(t => {
+    const cls = t.classification === 'ATTACK' ? 'attack' : 'normal';
+    const time = new Date(t.timestamp).toLocaleString();
+    const rc = riskColor(t.risk_score);
+    html += '<tr><td style="white-space:nowrap;color:var(--muted)">' + time + '</td>'
+      + '<td><span class="badge badge-' + cls + '">' + t.classification + '</span></td>'
+      + '<td><div class="risk-bar"><div class="risk-fill" style="width:' + t.risk_score + '%;background:' + rc + '"></div></div>' + t.risk_score + '</td>'
+      + '<td style="max-width:400px;color:var(--muted)">' + escapeHtml(t.explanation || '—') + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  return html;
+}
+
+async function refreshAll() {
+  try {
+    const [lr, tr] = await Promise.all([fetch(API + '/logs/'), fetch(API + '/threats/')]);
+    const ld = await lr.json();
+    const td = await tr.json();
+    document.getElementById('st-logs').textContent = ld.count || 0;
+    const attacks = (td.threats || []).filter(t => t.classification === 'ATTACK').length;
+    const normal = (td.threats || []).filter(t => t.classification === 'NORMAL').length;
+    const scores = (td.threats || []).map(t => t.risk_score);
+    const avg = scores.length ? Math.round(scores.reduce((a,b) => a+b, 0) / scores.length) : 0;
+    document.getElementById('st-attacks').textContent = attacks;
+    document.getElementById('st-normal').textContent = normal;
+    document.getElementById('st-risk').textContent = avg;
+    const el = document.getElementById('overview-threats');
+    if (td.threats && td.threats.length > 0) {
+      el.innerHTML = buildThreatTable(td.threats.slice(0, 5));
+    } else {
+      el.innerHTML = '<div class="empty"><i class="fas fa-shield-check"></i>No threats detected yet</div>';
+    }
+  } catch(e) { console.error(e); }
+}
+
+async function runAnalysis() {
+  const btn = document.getElementById('analyze-btn');
+  const res = document.getElementById('analyze-result');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div>Analyzing with AI...';
+  res.innerHTML = '';
+  try {
+    const r = await fetch(API + '/analyze/', {method: 'POST', headers: {'X-CSRFToken': '{% csrf_token %}', 'Content-Type': 'application/json'}});
+    const d = await r.json();
+    toast('Analysis completed!');
+    res.innerHTML = '<div style="padding:16px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:12px;color:var(--green);font-size:13px"><i class="fas fa-check-circle"></i> ' + (d.message || 'Done') + '</div>';
+  } catch(e) {
+    toast('Analysis failed', 'error');
+    res.innerHTML = '<div style="padding:16px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:12px;color:var(--red);font-size:13px"><i class="fas fa-times-circle"></i> Error occurred</div>';
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fas fa-brain"></i>Run AI Analysis';
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+refreshAll();
+setInterval(refreshAll, 30000);
+</script>
+</body>
+</html>
