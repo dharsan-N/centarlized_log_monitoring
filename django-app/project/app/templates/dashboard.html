@@ -74,9 +74,14 @@ tr:hover{background:rgba(99,102,241,0.05)}
 .badge{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
 .badge-attack{background:rgba(239,68,68,0.15);color:var(--red);border:1px solid rgba(239,68,68,0.3)}
 .badge-normal{background:rgba(16,185,129,0.15);color:var(--green);border:1px solid rgba(16,185,129,0.3)}
+.badge-resolved{background:rgba(16,185,129,0.1);color:var(--muted);border:1px solid var(--border);opacity:0.7}
 
 .risk-bar{width:60px;height:6px;background:var(--border);border-radius:3px;overflow:hidden;display:inline-block;vertical-align:middle;margin-right:8px}
 .risk-fill{height:100%;border-radius:3px;transition:width .5s}
+
+.btn-sm{padding:4px 8px;font-size:11px;border-radius:6px;margin-left:8px}
+.btn-patch{color:var(--green);border-color:rgba(16,185,129,0.3);background:rgba(16,185,129,0.05)}
+.btn-patch:hover{background:rgba(16,185,129,0.1);border-color:var(--green)}
 
 /* Log entries */
 .log-entry{padding:14px 24px;border-bottom:1px solid rgba(42,52,80,0.5);font-family:'Courier New',monospace;font-size:12px;color:#94a3b8;transition:background .15s;line-height:1.6}
@@ -243,18 +248,36 @@ async function loadThreats() {
 }
 
 function buildThreatTable(threats) {
-  let html = '<table><thead><tr><th>Time</th><th>Class</th><th>Risk</th><th>Explanation</th></tr></thead><tbody>';
+  let html = '<table><thead><tr><th>Time</th><th>Class</th><th>Status</th><th>Risk</th><th>Explanation</th><th>Actions</th></tr></thead><tbody>';
   threats.forEach(t => {
+    const isResolved = t.status === 'RESOLVED';
     const cls = t.classification === 'ATTACK' ? 'attack' : 'normal';
     const time = new Date(t.timestamp).toLocaleString();
     const rc = riskColor(t.risk_score);
-    html += '<tr><td style="white-space:nowrap;color:var(--muted)">' + time + '</td>'
+    const statusBadge = isResolved ? '<span class="badge badge-resolved">RESOLVED</span>' : '<span class="badge badge-' + cls + '">' + (t.classification === 'ATTACK' ? 'PENDING' : 'NORMAL') + '</span>';
+    
+    html += '<tr style="' + (isResolved ? 'opacity:0.6' : '') + '"><td style="white-space:nowrap;color:var(--muted)">' + time + '</td>'
       + '<td><span class="badge badge-' + cls + '">' + t.classification + '</span></td>'
+      + '<td>' + statusBadge + '</td>'
       + '<td><div class="risk-bar"><div class="risk-fill" style="width:' + t.risk_score + '%;background:' + rc + '"></div></div>' + t.risk_score + '</td>'
-      + '<td style="max-width:400px;color:var(--muted)">' + escapeHtml(t.explanation || '—') + '</td></tr>';
+      + '<td style="max-width:350px;color:var(--muted)">' + escapeHtml(t.explanation || '—') + '</td>'
+      + '<td>' + (t.classification === 'ATTACK' && !isResolved ? '<button class="btn btn-sm btn-patch" onclick="patchThreat(' + t.id + ')"><i class="fas fa-hammer"></i> Patch</button>' : '—') + '</td></tr>';
   });
   html += '</tbody></table>';
   return html;
+}
+
+async function patchThreat(id) {
+  try {
+    const r = await fetch(API + '/resolve/' + id + '/', {method: 'POST', headers: {'X-CSRFToken': '{% csrf_token %}'}});
+    if (r.ok) {
+      toast('Threat patched successfully!');
+      refreshAll();
+      if (document.getElementById('sec-threats').classList.contains('active')) loadThreats();
+    }
+  } catch(e) {
+    toast('Failed to patch threat', 'error');
+  }
 }
 
 async function refreshAll() {
@@ -263,13 +286,15 @@ async function refreshAll() {
     const ld = await lr.json();
     const td = await tr.json();
     document.getElementById('st-logs').textContent = ld.count || 0;
-    const attacks = (td.threats || []).filter(t => t.classification === 'ATTACK').length;
-    const normal = (td.threats || []).filter(t => t.classification === 'NORMAL').length;
+    const pendingAttacks = (td.threats || []).filter(t => t.classification === 'ATTACK' && t.status === 'PENDING').length;
+    const resolved = (td.threats || []).filter(t => t.status === 'RESOLVED').length;
     const scores = (td.threats || []).map(t => t.risk_score);
     const avg = scores.length ? Math.round(scores.reduce((a,b) => a+b, 0) / scores.length) : 0;
-    document.getElementById('st-attacks').textContent = attacks;
-    document.getElementById('st-normal').textContent = normal;
+    
+    document.getElementById('st-attacks').textContent = pendingAttacks;
+    document.getElementById('st-resolved').textContent = resolved;
     document.getElementById('st-risk').textContent = avg;
+    
     const el = document.getElementById('overview-threats');
     if (td.threats && td.threats.length > 0) {
       el.innerHTML = buildThreatTable(td.threats.slice(0, 5));

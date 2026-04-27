@@ -56,7 +56,7 @@ class OllamaService:
                 "model": self.model,
                 "prompt": prompt,
                 "stream": False
-            }, timeout=60)
+            }, timeout=300)
             
             if response.status_code == 200:
                 result = response.json().get('response', '{}')
@@ -87,9 +87,9 @@ def process_and_store_logs():
         print("No new logs found.")
         return
 
-    print(f"Fetched {len(logs)} logs for analysis.")
+    print(f"Fetched {len(logs)} logs. Analyzing the 20 most recent logs...")
     ollama_service = OllamaService()
-    analysis = ollama_service.analyze_logs(logs)
+    analysis = ollama_service.analyze_logs(logs[:20])
 
     if analysis:
         print(f"Analysis result: {analysis}")

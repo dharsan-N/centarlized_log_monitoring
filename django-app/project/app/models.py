@@ -6,6 +6,7 @@ class ThreatLog(models.Model):
     classification = models.CharField(max_length=50) # NORMAL or ATTACK
     risk_score = models.IntegerField(default=0)
     explanation = models.TextField()
+    status = models.CharField(max_length=20, default='PENDING') # PENDING or RESOLVED
 
     def __str__(self):
         return f"{self.classification} ({self.risk_score}) - {self.timestamp}"

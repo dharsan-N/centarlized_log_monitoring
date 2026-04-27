@@ -28,7 +28,8 @@ def get_threats(request):
             "classification": t.classification,
             "risk_score": t.risk_score,
             "explanation": t.explanation,
-            "log_content": t.log_content
+            "log_content": t.log_content,
+            "status": t.status
         } for t in threats
     ]
     return Response({"status": "success", "count": len(data), "threats": data})
@@ -39,3 +40,16 @@ def analyze_now(request):
     """Trigger a manual analysis of recent logs"""
     process_and_store_logs()
     return Response({"status": "success", "message": "Manual analysis triggered and completed (if logs were present)."})
+
+@csrf_exempt
+@api_view(['POST'])
+def resolve_threat(request, threat_id):
+    """Mark a specific threat as resolved"""
+    try:
+        threat = ThreatLog.objects.get(id=threat_id)
+        threat.status = 'RESOLVED'
+        threat.save()
+        return Response({"status": "success", "message": f"Threat {threat_id} marked as RESOLVED."})
+    except ThreatLog.DoesNotExist:
+        return Response({"status": "error", "message": "Threat not found."}, status=404)
+
