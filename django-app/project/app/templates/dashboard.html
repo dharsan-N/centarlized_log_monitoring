@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SecOps - Log Monitor</title>
+<title>Log Monitoring</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 <style>
@@ -113,7 +113,7 @@ tr:hover{background:rgba(99,102,241,0.05)}
   <aside class="sidebar">
     <div class="logo">
       <div class="logo-icon"><i class="fas fa-shield-halved"></i></div>
-      <div><h1>SecOps</h1><span>Log Monitor v1.0</span></div>
+      <div><h1>Log Monitoring</h1><span>v1.0</span></div>
     </div>
     <nav class="nav">
       <button class="nav-item active" onclick="showSection('overview')"><i class="fas fa-chart-pie"></i>Overview</button>
@@ -287,12 +287,12 @@ async function refreshAll() {
     const td = await tr.json();
     document.getElementById('st-logs').textContent = ld.count || 0;
     const pendingAttacks = (td.threats || []).filter(t => t.classification === 'ATTACK' && t.status === 'PENDING').length;
-    const resolved = (td.threats || []).filter(t => t.status === 'RESOLVED').length;
+    const normalCount = (td.threats || []).filter(t => t.classification !== 'ATTACK').length;
     const scores = (td.threats || []).map(t => t.risk_score);
     const avg = scores.length ? Math.round(scores.reduce((a,b) => a+b, 0) / scores.length) : 0;
     
     document.getElementById('st-attacks').textContent = pendingAttacks;
-    document.getElementById('st-resolved').textContent = resolved;
+    document.getElementById('st-normal').textContent = normalCount;
     document.getElementById('st-risk').textContent = avg;
     
     const el = document.getElementById('overview-threats');

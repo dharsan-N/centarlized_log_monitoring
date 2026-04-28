@@ -4,6 +4,11 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     ports:
       - "9200:9200"
     networks:
@@ -12,11 +17,20 @@ services:
   filebeat:
     image: docker.elastic.co/beats/filebeat:8.11.0
     user: root
+    command: filebeat -e -strict.perms=false
     volumes:
       - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
-      - ./logs:/logs:ro
+      - log_data:/logs:ro
     depends_on:
       - elasticsearch
+      - log-generator
+    networks:
+      - log_network
+
+  log-generator:
+    build: ./log-generator
+    volumes:
+      - log_data:/logs
     networks:
       - log_network
 
@@ -64,3 +78,4 @@ networks:
 
 volumes:
   ollama_data:
+  log_data:

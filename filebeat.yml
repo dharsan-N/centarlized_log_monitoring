@@ -1,8 +1,31 @@
 filebeat.inputs:
 - type: filestream
+  id: app-logs
   enabled: true
   paths:
-    - /logs/*.log
+    - /logs/app.log
+    - /logs/test.log
+  fields:
+    log_type: application
+  fields_under_root: true
+
+- type: filestream
+  id: attack-logs
+  enabled: true
+  paths:
+    - /logs/attack.log
+  fields:
+    log_type: attack
+  fields_under_root: true
+
+- type: filestream
+  id: system-logs
+  enabled: true
+  paths:
+    - /logs/system.log
+  fields:
+    log_type: system
+  fields_under_root: true
 
 output.elasticsearch:
   hosts: ["http://elasticsearch:9200"]
