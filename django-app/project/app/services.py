@@ -215,66 +215,61 @@ class ElasticsearchService:
 
 
 # ---------------------------------------------------------------------------
-# Ollama AI Service
+# Active Response Service
 # ---------------------------------------------------------------------------
-class OllamaService:
-    """Handles AI-based log analysis via Ollama."""
+import os
+
+class ActiveResponseService:
+    """Handles automatic IP blocking and storage of patched logs."""
 
     def __init__(self):
-        self.host = settings.OLLAMA_HOST
-        self.model = "llama3"
+        self.blocked_ips_file = os.path.join(settings.BASE_DIR, 'blocked_ips.json')
+        self.patched_logs_file = os.path.join(settings.BASE_DIR, 'patched_logs.json')
+        
+        # Ensure files exist
+        if not os.path.exists(self.blocked_ips_file):
+            with open(self.blocked_ips_file, 'w') as f: json.dump([], f)
+        if not os.path.exists(self.patched_logs_file):
+            with open(self.patched_logs_file, 'w') as f: json.dump([], f)
 
-    def analyze_logs(self, logs):
-        """
-        Send logs to the Ollama LLM for threat classification.
-        Returns dict with classification, risk_score, explanation.
-        """
-        if not logs:
-            return None
-
-        # Build log text — handle both dict and string formats
-        log_lines = []
-        for log in logs:
-            if isinstance(log, dict):
-                log_lines.append(f"[{log.get('server_name', 'unknown')}] [{log.get('severity', '')}] {log.get('message', '')}")
-            else:
-                log_lines.append(str(log))
-
-        prompt = (
-            "Analyze the following log entries and classify the overall activity as either NORMAL or ATTACK. "
-            "Assign a risk score from 0 to 100. Provide a brief explanation. "
-            "Respond ONLY in the following JSON format without markdown wrapping:\n"
-            '{"classification": "NORMAL/ATTACK", "risk_score": 0-100, "explanation": "reasoning here"}\n\n'
-            "Logs:\n" + "\n".join(log_lines)
-        )
-
+    def get_blocked_ips(self):
         try:
-            response = requests.post(
-                f"{self.host}/api/generate",
-                json={"model": self.model, "prompt": prompt, "stream": False},
-                timeout=300,
-            )
+            with open(self.blocked_ips_file, 'r') as f: return json.load(f)
+        except Exception: return []
 
-            if response.status_code == 200:
-                result = response.json().get("response", "{}")
-                try:
-                    # Sometimes LLM wraps json in ```json ... ```
-                    if "```json" in result:
-                        result = result.split("```json")[1].split("```")[0].strip()
-                    elif "```" in result:
-                        result = result.split("```")[1].strip()
+    def block_ip(self, ip, severity, attack_type, server_name):
+        blocked = self.get_blocked_ips()
+        if any(b['ip'] == ip for b in blocked):
+            return False
+        
+        blocked.append({
+            "ip": ip,
+            "timestamp": datetime.now().isoformat(),
+            "severity": severity,
+            "attack_type": attack_type,
+            "server_name": server_name
+        })
+        with open(self.blocked_ips_file, 'w') as f:
+            json.dump(blocked, f, indent=2)
+        return True
 
-                    data = json.loads(result)
-                    return data
-                except json.JSONDecodeError:
-                    logger.error(f"Failed to parse JSON from Ollama: {result}")
-                    return None
-            else:
-                logger.error(f"Ollama API returned status code {response.status_code}")
-                return None
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error communicating with Ollama: {e}")
-            return None
+    def get_patched_logs(self):
+        try:
+            with open(self.patched_logs_file, 'r') as f: return json.load(f)
+        except Exception: return []
+
+    def store_patched_log(self, original_log, detected_issue, action_taken):
+        patched = self.get_patched_logs()
+        patched.append({
+            "original_log": original_log,
+            "detected_issue": detected_issue,
+            "action_taken": action_taken,
+            "timestamp": datetime.now().isoformat()
+        })
+        # Keep last 1000 to avoid huge file
+        if len(patched) > 1000: patched = patched[-1000:]
+        with open(self.patched_logs_file, 'w') as f:
+            json.dump(patched, f, indent=2)
 
 
 # ---------------------------------------------------------------------------
@@ -347,10 +342,6 @@ class AlertService:
                                 <td style="padding: 12px 0; color: #ef4444; font-weight: 600; font-size: 14px; border-bottom: 1px solid #2a3450;">{threat_log.classification}</td>
                             </tr>
                         </table>
-                        <div style="margin-top: 20px; padding: 16px; background: rgba(99,102,241,0.1); border-radius: 8px; border: 1px solid rgba(99,102,241,0.3);">
-                            <p style="color: #64748b; font-size: 12px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: 1px;">AI Explanation</p>
-                            <p style="color: #e2e8f0; font-size: 13px; line-height: 1.6; margin: 0;">{threat_log.explanation}</p>
-                        </div>
                         <div style="margin-top: 20px; padding: 16px; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid #2a3450;">
                             <p style="color: #64748b; font-size: 12px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: 1px;">Log Content</p>
                             <p style="color: #94a3b8; font-size: 12px; font-family: 'Courier New', monospace; line-height: 1.6; margin: 0; white-space: pre-wrap;">{threat_log.log_content[:500]}</p>
@@ -425,8 +416,8 @@ def process_and_store_logs():
     """
     Main processing pipeline:
     1. Fetch recent logs from Elasticsearch
-    2. Group by server
-    3. Analyze each group with AI
+    2. Detect attacks using rules
+    3. Block IPs for High/Critical threats and store to JSON
     4. Store results with enriched metadata
     5. Send email alerts for High/Critical events
     """
@@ -434,75 +425,63 @@ def process_and_store_logs():
     logs = es_service.fetch_recent_logs(minutes=1)
 
     if not logs:
-        print("No new logs found.")
         return
 
-    # Sync servers first
     sync_servers()
-
-    # Group logs by server
-    server_groups = {}
-    for log in logs:
-        sid = log.get("server_id", "unknown")
-        server_groups.setdefault(sid, []).append(log)
-
-    print(f"Fetched {len(logs)} logs from {len(server_groups)} server(s). Analyzing...")
-
-    ollama_service = OllamaService()
     alert_service = AlertService()
+    response_service = ActiveResponseService()
 
-    for server_id, server_logs in server_groups.items():
-        # Analyze up to 20 logs per server
-        analysis = ollama_service.analyze_logs(server_logs[:20])
+    # Track processed messages in memory for this run to avoid dupes in this batch
+    processed_msgs = set()
 
-        if analysis:
-            print(f"[{server_id}] Analysis: {analysis}")
-
-            # Determine severity from logs
-            severities = [log.get("severity", "LOW") for log in server_logs]
-            severity_priority = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
-            max_severity = max(severities, key=lambda s: severity_priority.get(s, 0))
-
-            # Extract metadata from logs
-            all_messages = " ".join(log.get("message", "") for log in server_logs)
-            source_ip = extract_ip(all_messages)
-            attack_type = detect_attack_type(all_messages)
-
-            # Get or create server
-            server_obj = None
-            try:
-                server_obj = Server.objects.get(server_id=server_id)
-            except Server.DoesNotExist:
-                pass
-
-            # Build content summary
-            log_content_summary = "\n".join(
-                log.get("message", "") for log in server_logs[:5]
-            ) + ("..." if len(server_logs) > 5 else "")
-
-            # Determine risk score — use AI score but validate against severity
-            risk_score = analysis.get("risk_score", 0)
-            min_risk = map_severity_to_risk(max_severity)
-            if risk_score < min_risk:
-                risk_score = min_risk
-
-            threat = ThreatLog.objects.create(
-                log_content=log_content_summary,
-                classification=analysis.get("classification", "UNKNOWN"),
-                risk_score=risk_score,
-                explanation=analysis.get("explanation", ""),
-                server=server_obj,
-                severity_level=max_severity,
-                source_ip=source_ip,
-                attack_type=attack_type,
-            )
-
-            if analysis.get("classification") == "ATTACK":
-                print(f"  ⚠ ALERT: ATTACK DETECTED on {server_id}!")
-
-            # Send email alert for High/Critical
-            if alert_service.should_alert(max_severity):
+    for log in logs:
+        msg = log.get("message", "")
+        if not msg or msg in processed_msgs:
+            continue
+            
+        # Check DB to prevent duplicate processing of the same exact log string
+        if ThreatLog.objects.filter(log_content=msg).exists():
+            continue
+            
+        processed_msgs.add(msg)
+        
+        severity = log.get("severity", "LOW")
+        attack_type = detect_attack_type(msg)
+        source_ip = extract_ip(msg)
+        server_id = log.get("server_id", "unknown")
+        server_name = log.get("server_name", "unknown")
+        
+        server_obj = None
+        try:
+            server_obj = Server.objects.get(server_id=server_id)
+        except Server.DoesNotExist:
+            pass
+            
+        classification = "ATTACK" if severity in ["HIGH", "CRITICAL"] or attack_type else "NORMAL"
+        risk_score = map_severity_to_risk(severity)
+        explanation = f"Detected {attack_type} pattern" if attack_type else "Normal system behavior"
+        
+        threat = ThreatLog.objects.create(
+            log_content=msg,
+            classification=classification,
+            risk_score=risk_score,
+            explanation=explanation,
+            server=server_obj,
+            severity_level=severity,
+            source_ip=source_ip,
+            attack_type=attack_type,
+        )
+        
+        if classification == "ATTACK" and severity in ["HIGH", "CRITICAL"]:
+            action_taken = "No IP found to block"
+            if source_ip:
+                is_blocked = response_service.block_ip(source_ip, severity, attack_type or "Unknown", server_name)
+                if is_blocked:
+                    action_taken = f"Blocked IP {source_ip}"
+                else:
+                    action_taken = f"IP {source_ip} already blocked"
+            
+            response_service.store_patched_log(msg, attack_type or "Unknown", action_taken)
+            
+            if alert_service.should_alert(severity):
                 alert_service.send_alert(threat)
-                print(f"  📧 Email alert sent for {max_severity} event on {server_id}")
-        else:
-            print(f"[{server_id}] Log analysis failed.")

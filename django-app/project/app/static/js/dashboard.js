@@ -19,6 +19,8 @@ function showSection(name) {
   else if (name === 'logs') loadLogs();
   else if (name === 'threats') loadThreats();
   else if (name === 'servers') loadServers();
+  else if (name === 'blocked-ips') loadBlockedIps();
+  else if (name === 'actions') loadHandledLogs();
   
   // Close mobile sidebar if open
   const app = document.querySelector('.app');
@@ -67,11 +69,13 @@ function buildFilterParams() {
   const sid = document.getElementById('f-server');
   const sev = document.getElementById('f-severity');
   const kw = document.getElementById('f-keyword');
+  const at = document.getElementById('f-attack-type');
   const df = document.getElementById('f-date-from');
   const dt = document.getElementById('f-date-to');
   if (sid && sid.value) p.set('server_id', sid.value);
   if (sev && sev.value) p.set('severity', sev.value);
   if (kw && kw.value) p.set('keyword', kw.value);
+  if (at && at.value) p.set('attack_type', at.value);
   if (df && df.value) p.set('date_from', df.value);
   if (dt && dt.value) p.set('date_to', dt.value);
   return p.toString();
@@ -79,12 +83,15 @@ function buildFilterParams() {
 
 function applyFilters() {
   const active = document.querySelector('.section.active');
+  if (!active) return;
   if (active.id === 'sec-logs') loadLogs();
   else if (active.id === 'sec-threats') loadThreats();
+  else if (active.id === 'sec-blocked-ips') loadBlockedIps();
+  else if (active.id === 'sec-actions') loadHandledLogs();
 }
 
 function clearFilters() {
-  ['f-server','f-severity','f-keyword','f-date-from','f-date-to'].forEach(id => {
+  ['f-server','f-severity','f-keyword','f-attack-type','f-date-from','f-date-to'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -307,24 +314,65 @@ function selectServer(serverId) {
   showSection('threats');
 }
 
-// --- AI Analysis ---
-async function runAnalysis() {
-  const btn = document.getElementById('analyze-btn');
-  const res = document.getElementById('analyze-result');
-  btn.disabled = true;
-  btn.innerHTML = '<div class="spinner"></div>Analyzing with AI...';
-  res.innerHTML = '';
+// --- Blocked IPs ---
+async function loadBlockedIps() {
+  const body = document.getElementById('blocked-ips-body');
+  if (!body) return;
+  body.innerHTML = '<div class="empty"><div class="spinner"></div></div>';
   try {
-    const r = await fetch(API + '/analyze/', {method: 'POST', headers: {'X-CSRFToken': getCsrf(), 'Content-Type': 'application/json'}});
+    const params = buildFilterParams();
+    const r = await fetch(API + '/blocked-ips/?' + params);
     const d = await r.json();
-    toast('Analysis completed!');
-    res.innerHTML = '<div style="padding:16px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:12px;color:var(--green);font-size:13px"><i class="fas fa-check-circle"></i> ' + (d.message || 'Done') + '</div>';
+    if (!d.blocked_ips || d.blocked_ips.length === 0) {
+      body.innerHTML = '<div class="empty"><i class="fas fa-check-circle"></i>No IPs blocked yet</div>';
+      return;
+    }
+    let html = '<table><thead><tr><th>Time</th><th>IP Address</th><th>Severity</th><th>Attack Type</th><th>Server</th></tr></thead><tbody>';
+    d.blocked_ips.forEach(b => {
+      html += '<tr><td style="color:var(--muted)">' + new Date(b.timestamp).toLocaleString() + '</td>'
+        + '<td style="font-family:monospace;color:var(--red);font-weight:bold">' + escapeHtml(b.ip) + '</td>'
+        + '<td>' + sevBadge(b.severity) + '</td>'
+        + '<td>' + escapeHtml(b.attack_type) + '</td>'
+        + '<td>' + escapeHtml(b.server_name) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    body.innerHTML = html;
   } catch(e) {
-    toast('Analysis failed', 'error');
-    res.innerHTML = '<div style="padding:16px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:12px;color:var(--red);font-size:13px"><i class="fas fa-times-circle"></i> Error occurred</div>';
+    body.innerHTML = '<div class="empty"><i class="fas fa-exclamation-circle"></i>Failed to load blocked IPs</div>';
   }
-  btn.disabled = false;
-  btn.innerHTML = '<i class="fas fa-brain"></i>Run AI Analysis';
+}
+
+// --- Security Actions ---
+async function loadHandledLogs() {
+  const body = document.getElementById('actions-body');
+  if (!body) return;
+  body.innerHTML = '<div class="empty"><div class="spinner"></div></div>';
+  try {
+    const r = await fetch(API + '/handled-logs/');
+    const d = await r.json();
+    if (!d.handled_logs || d.handled_logs.length === 0) {
+      body.innerHTML = '<div class="empty"><i class="fas fa-shield-alt"></i>No security actions recorded yet</div>';
+      return;
+    }
+    let html = '<table><thead><tr><th>Time</th><th>Action Taken</th><th>Detected Issue</th><th>Original Log</th></tr></thead><tbody>';
+    d.handled_logs.forEach(l => {
+      html += '<tr><td style="white-space:nowrap;color:var(--muted)">' + new Date(l.timestamp).toLocaleString() + '</td>'
+        + '<td style="color:var(--green);font-weight:600">' + escapeHtml(l.action_taken) + '</td>'
+        + '<td>' + escapeHtml(l.detected_issue) + '</td>'
+        + '<td style="font-family:monospace;font-size:11px;color:var(--muted);max-width:300px;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(l.original_log) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    body.innerHTML = html;
+  } catch(e) {
+    body.innerHTML = '<div class="empty"><i class="fas fa-exclamation-circle"></i>Failed to load handled logs</div>';
+  }
+}
+
+// --- Automated Detection ---
+async function runDetection() {
+  try {
+    await fetch(API + '/detect/', {method: 'POST'});
+  } catch(e) { console.error('Detection error:', e); }
 }
 
 // --- System Status ---
@@ -361,6 +409,7 @@ document.addEventListener('DOMContentLoaded', () => {
   checkSystemStatus();
   
   setInterval(() => {
+    runDetection();
     refreshAll();
     checkSystemStatus();
   }, 30000);

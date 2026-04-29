@@ -30,24 +30,27 @@
                 </div>
             </div>
             <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle Sidebar">
-                <i class="fas fa-chevron-left" id="sidebar-toggle-icon"></i>
+                <i class="fas fa-bars" id="sidebar-toggle-icon"></i>
             </button>
         </div>
         <nav class="nav" id="sidebar-nav">
-            <button class="nav-item active" data-section="overview" onclick="showSection('overview')">
+            <button class="nav-item active" data-section="overview" onclick="showSection('overview')" title="Overview">
                 <i class="fas fa-chart-pie"></i><span class="nav-label">Overview</span>
             </button>
-            <button class="nav-item" data-section="servers" onclick="showSection('servers')">
+            <button class="nav-item" data-section="servers" onclick="showSection('servers')" title="Servers">
                 <i class="fas fa-server"></i><span class="nav-label">Servers</span>
             </button>
-            <button class="nav-item" data-section="logs" onclick="showSection('logs')">
+            <button class="nav-item" data-section="logs" onclick="showSection('logs')" title="Live Logs">
                 <i class="fas fa-scroll"></i><span class="nav-label">Live Logs</span>
             </button>
-            <button class="nav-item" data-section="threats" onclick="showSection('threats')">
+            <button class="nav-item" data-section="threats" onclick="showSection('threats')" title="Threat Alerts">
                 <i class="fas fa-bug"></i><span class="nav-label">Threat Alerts</span>
             </button>
-            <button class="nav-item" data-section="analyze" onclick="showSection('analyze')">
-                <i class="fas fa-brain"></i><span class="nav-label">AI Analysis</span>
+            <button class="nav-item" data-section="blocked-ips" onclick="showSection('blocked-ips')" title="Blocked IPs">
+                <i class="fas fa-ban"></i><span class="nav-label">Blocked IPs</span>
+            </button>
+            <button class="nav-item" data-section="actions" onclick="showSection('actions')" title="Security Actions">
+                <i class="fas fa-shield-alt"></i><span class="nav-label">Security Actions</span>
             </button>
         </nav>
         <div class="sidebar-footer">

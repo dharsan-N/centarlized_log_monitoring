@@ -12,7 +12,7 @@ from rest_framework.response import Response
 from django.db.models import Count, Avg, Q
 
 from .models import ThreatLog, Server
-from .services import ElasticsearchService, process_and_store_logs
+from .services import ElasticsearchService, process_and_store_logs, ActiveResponseService
 
 
 def dashboard(request):
@@ -179,12 +179,12 @@ def get_stats(request):
 
 @csrf_exempt
 @api_view(["POST"])
-def analyze_now(request):
-    """Trigger a manual analysis of recent logs."""
+def run_detection(request):
+    """Trigger a manual log processing and detection pipeline."""
     process_and_store_logs()
     return Response({
         "status": "success",
-        "message": "Manual analysis triggered and completed (if logs were present).",
+        "message": "Detection pipeline completed. Threats processed and responded to.",
     })
 
 
@@ -199,3 +199,25 @@ def resolve_threat(request, threat_id):
         return Response({"status": "success", "message": f"Threat {threat_id} marked as RESOLVED."})
     except ThreatLog.DoesNotExist:
         return Response({"status": "error", "message": "Threat not found."}, status=404)
+
+@api_view(["GET"])
+def get_blocked_ips(request):
+    """Fetch all automatically blocked IPs."""
+    service = ActiveResponseService()
+    ips = service.get_blocked_ips()
+    # Apply optional filters
+    if request.GET.get("server_id"):
+        ips = [ip for ip in ips if ip.get("server_name") == request.GET["server_id"]]
+    if request.GET.get("severity"):
+        ips = [ip for ip in ips if ip.get("severity") == request.GET["severity"]]
+    if request.GET.get("attack_type"):
+        ips = [ip for ip in ips if request.GET["attack_type"].lower() in ip.get("attack_type", "").lower()]
+        
+    return Response({"status": "success", "count": len(ips), "blocked_ips": ips[::-1]})
+
+@api_view(["GET"])
+def get_handled_logs(request):
+    """Fetch logs that were processed and patched."""
+    service = ActiveResponseService()
+    logs = service.get_patched_logs()
+    return Response({"status": "success", "count": len(logs), "handled_logs": logs[::-1]})

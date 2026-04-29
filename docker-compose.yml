@@ -34,23 +34,7 @@ services:
     networks:
       - log_network
 
-  ollama:
-    image: ollama/ollama
-    ports:
-      - "11434:11434"
-    networks:
-      - log_network
-    volumes:
-      - ollama_data:/root/.ollama
 
-  ollama-pull:
-    image: curlimages/curl:latest
-    depends_on:
-      - ollama
-    networks:
-      - log_network
-    command: >
-      sh -c "while ! curl -s http://ollama:11434/api/tags > /dev/null; do echo 'Waiting for Ollama to be available...'; sleep 5; done; echo 'Ollama is up, pulling llama3...'; curl -X POST http://ollama:11434/api/pull -d '{\"name\":\"llama3\"}'; echo 'Model pulled successfully.';"
 
   django-app:
     build: ./django-app
@@ -58,10 +42,8 @@ services:
       - "8000:8000"
     depends_on:
       - elasticsearch
-      - ollama
     environment:
       - ELASTICSEARCH_HOST=http://elasticsearch:9200
-      - OLLAMA_HOST=http://ollama:11434
       - SMTP_HOST=smtp.gmail.com
       - SMTP_PORT=587
       - SMTP_USERNAME=d.logmonitoring@gmail.com
@@ -83,5 +65,4 @@ networks:
     driver: bridge
 
 volumes:
-  ollama_data:
   log_data:

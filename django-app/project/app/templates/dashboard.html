@@ -12,7 +12,8 @@
         <option value="HIGH">High</option>
         <option value="CRITICAL">Critical</option>
       </select>
-      <input type="text" id="f-keyword" placeholder="Search keyword, IP, attack type...">
+      <input type="text" id="f-attack-type" placeholder="Attack type...">
+      <input type="text" id="f-keyword" placeholder="Search keyword or IP...">
       <input type="date" id="f-date-from" title="From date">
       <input type="date" id="f-date-to" title="To date">
       <button class="btn btn-primary" onclick="applyFilters()" style="padding:8px 16px"><i class="fas fa-search"></i>Filter</button>
@@ -82,20 +83,25 @@
       </div>
     </div>
 
-    <!-- ANALYZE -->
-    <div class="section" id="sec-analyze">
-      <div class="header"><h2>AI Analysis</h2></div>
+    <!-- BLOCKED IPS -->
+    <div class="section" id="sec-blocked-ips">
+      <div class="header"><h2>Blocked IPs</h2>
+        <div class="header-actions"><button class="btn" onclick="loadBlockedIps()"><i class="fas fa-sync-alt"></i>Refresh</button></div>
+      </div>
       <div class="panel">
-        <div class="panel-header"><h3><i class="fas fa-robot" style="color:var(--accent2)"></i>Trigger Manual Analysis</h3></div>
-        <div style="padding:40px;text-align:center">
-          <p style="color:var(--muted);margin-bottom:24px;max-width:500px;margin-left:auto;margin-right:auto;line-height:1.7">
-            Send recent logs from all monitored servers to the Ollama LLM for AI-based threat classification. Results will appear in the Threat Alerts section. Email alerts will be sent for High and Critical severity events.
-          </p>
-          <button class="btn btn-primary" id="analyze-btn" onclick="runAnalysis()" style="margin:0 auto;font-size:15px;padding:14px 32px">
-            <i class="fas fa-brain"></i>Run AI Analysis
-          </button>
-          <div id="analyze-result" style="margin-top:24px"></div>
-        </div>
+        <div class="panel-header"><h3><i class="fas fa-ban" style="color:var(--red)"></i>Active IP Blocks</h3></div>
+        <div class="panel-body" id="blocked-ips-body" style="max-height:600px"></div>
+      </div>
+    </div>
+
+    <!-- SECURITY ACTIONS -->
+    <div class="section" id="sec-actions">
+      <div class="header"><h2>Security Actions</h2>
+        <div class="header-actions"><button class="btn" onclick="loadHandledLogs()"><i class="fas fa-sync-alt"></i>Refresh</button></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><h3><i class="fas fa-shield-alt" style="color:var(--green)"></i>Handled Logs & Patches</h3></div>
+        <div class="panel-body" id="actions-body" style="max-height:600px"></div>
       </div>
     </div>
 {% endblock %}
