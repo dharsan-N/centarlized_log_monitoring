@@ -65,7 +65,7 @@ services:
       - SMTP_HOST=smtp.gmail.com
       - SMTP_PORT=587
       - SMTP_USERNAME=d.logmonitoring@gmail.com
-      - SMTP_PASSWORD=brmabvqlziayqtof   # remove spaces
+      - SMTP_PASSWORD=brmabvqlziayqtof
       - ALERT_EMAIL_FROM=d.logmonitoring@gmail.com
       - ALERT_EMAIL_TO=hariprasath475767@gmail.com
     networks:
