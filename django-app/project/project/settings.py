@@ -66,12 +66,30 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
+STATICFILES_DIRS = [BASE_DIR / 'app' / 'static']
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ALLOW_ALL_ORIGINS = True
 
+# ---------------------------------------------------------------------------
+# External Services
+# ---------------------------------------------------------------------------
 ELASTICSEARCH_HOST = os.environ.get('ELASTICSEARCH_HOST', 'http://localhost:9200')
 OLLAMA_HOST = os.environ.get('OLLAMA_HOST', 'http://localhost:11434')
 
+# ---------------------------------------------------------------------------
+# Email Alerting Configuration (SMTP)
+# Set these environment variables to enable email alerts for High/Critical events.
+# ---------------------------------------------------------------------------
+SMTP_HOST = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
+SMTP_PORT = int(os.environ.get('SMTP_PORT', '587'))
+ALERT_EMAIL_FROM = os.environ.get('ALERT_EMAIL_FROM', '')
+ALERT_EMAIL_TO = os.environ.get('ALERT_EMAIL_TO', '')
+SMTP_USERNAME = os.environ.get('SMTP_USERNAME', '')
+SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
+
+# ---------------------------------------------------------------------------
+# APScheduler
+# ---------------------------------------------------------------------------
 APSCHEDULER_DATETIME_FORMAT = "N j, Y, f:s a"
 APSCHEDULER_RUN_NOW_TIMEOUT = 25

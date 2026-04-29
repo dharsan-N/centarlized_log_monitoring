@@ -1,30 +1,16 @@
 filebeat.inputs:
 - type: filestream
-  id: app-logs
+  id: multi-server-logs
   enabled: true
   paths:
-    - /logs/app.log
-    - /logs/test.log
+    - /logs/server_*.log
+  parsers:
+    - ndjson:
+        target: ""
+        overwrite_keys: true
+        add_error_key: true
   fields:
-    log_type: application
-  fields_under_root: true
-
-- type: filestream
-  id: attack-logs
-  enabled: true
-  paths:
-    - /logs/attack.log
-  fields:
-    log_type: attack
-  fields_under_root: true
-
-- type: filestream
-  id: system-logs
-  enabled: true
-  paths:
-    - /logs/system.log
-  fields:
-    log_type: system
+    log_type: server
   fields_under_root: true
 
 output.elasticsearch:

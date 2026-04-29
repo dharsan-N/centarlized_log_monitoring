@@ -62,6 +62,12 @@ services:
     environment:
       - ELASTICSEARCH_HOST=http://elasticsearch:9200
       - OLLAMA_HOST=http://ollama:11434
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USERNAME=d.logmonitoring@gmail.com
+      - SMTP_PASSWORD=brmabvqlziayqtof   # remove spaces
+      - ALERT_EMAIL_FROM=d.logmonitoring@gmail.com
+      - ALERT_EMAIL_TO=hariprasath475767@gmail.com
     networks:
       - log_network
 

@@ -1,79 +1,51 @@
+"""
+Multi-Server Log Generator
+============================
+Generates realistic, diverse logs from multiple simulated servers.
+Each server runs as a separate thread and produces logs with
+weighted severity distributions (Low / Medium / High / Critical).
+
+Logs are tagged with server ID and name using JSON format so that
+Filebeat can forward structured metadata to Elasticsearch.
+"""
+
+import json
+import os
 import random
 import time
 import datetime
-import os
+import threading
+from server_config import SERVERS, MALICIOUS_IPS, NORMAL_IPS, USERS
 
 LOG_DIR = "/logs"
 
-NORMAL_LOGS = [
-    "INFO: User {user} logged in successfully from {ip}",
-    "INFO: GET /api/v1/users - 200 OK ({ms}ms)",
-    "INFO: POST /api/v1/orders - 201 Created ({ms}ms)",
-    "INFO: Database query executed in {ms}ms",
-    "INFO: Cache hit for key session:{user}",
-    "INFO: Health check passed - all services operational",
-    "INFO: Background job cleanup_expired_sessions completed",
-    "INFO: File uploaded successfully by {user}: report_{num}.pdf",
-    "INFO: Email notification sent to {user}@company.com",
-    "DEBUG: Connection pool stats: active=5, idle=15, total=20",
-    "INFO: Scheduled backup started for database main_db",
-    "INFO: API rate limit check passed for {ip}",
-    "INFO: User {user} updated profile settings",
-    "INFO: Payment processed successfully - order #{num}",
-    "INFO: Static assets served from CDN - 200 OK",
-]
-
-ATTACK_LOGS = [
-    "ERROR: Multiple failed login attempts for user admin from {ip} - attempt {attempt}/10",
-    "WARN: SQL injection attempt detected: ' OR 1=1 -- from {ip}",
-    "CRITICAL: Brute force attack detected from {ip} - {attempt} attempts in 60s",
-    "ERROR: Unauthorized access attempt to /admin/config from {ip}",
-    "WARN: XSS payload detected in request body from {ip}: <script>alert('xss')</script>",
-    "ERROR: Directory traversal attempt: GET /../../etc/passwd from {ip}",
-    "CRITICAL: Suspicious file upload attempt: shell.php from {ip}",
-    "WARN: Port scan detected from {ip} - scanning ports 22,80,443,3306,5432",
-    "ERROR: Invalid JWT token - possible token forgery from {ip}",
-    "CRITICAL: DDoS pattern detected - {attempt} requests/sec from {ip} subnet",
-    "WARN: Command injection attempt in parameter: ; cat /etc/shadow from {ip}",
-    "ERROR: Unauthorized API key usage detected from {ip}",
-    "CRITICAL: Privilege escalation attempt by user guest from {ip}",
-    "WARN: Suspicious user-agent: sqlmap/1.5 from {ip}",
-    "ERROR: CSRF token mismatch - possible cross-site attack from {ip}",
-]
-
-SYSTEM_LOGS = [
-    "syslog: CPU usage at {cpu}% on worker-node-{node}",
-    "syslog: Memory usage: {mem}MB / 8192MB ({pct}%)",
-    "syslog: Disk I/O: read={read}MB/s write={write}MB/s",
-    "kernel: [UFW BLOCK] IN=eth0 SRC={ip} DST=10.0.0.1 PROTO=TCP DPT={port}",
-    "syslog: Network interface eth0: RX={rx}MB TX={tx}MB",
-    "systemd: Service nginx reloaded successfully",
-    "sshd: Accepted publickey for deploy from {ip} port {port}",
-    "sshd: Failed password for root from {ip} port {port} ssh2",
-    "kernel: Out of memory: Killed process {pid} (java) total-vm:4096000kB",
-    "cron: (root) CMD (/usr/bin/certbot renew --quiet)",
-    "systemd: Started Docker Container {container}",
-    "syslog: Swap usage: {swap}MB / 4096MB",
-    "auditd: USER_AUTH pid={pid} uid=0 auid=1000 msg='op=PAM:authentication acct=\"root\" res=failed'",
-    "syslog: Load average: {load1} {load2} {load3}",
-    "kernel: TCP: request_sock_TCP: Possible SYN flooding on port {port}. Sending cookies.",
-]
-
-USERS = ["alice", "bob", "charlie", "david", "admin", "deploy", "guest"]
-MALICIOUS_IPS = ["45.33.32.156", "185.220.101.35", "192.168.1.100", "10.10.14.5", "23.129.64.210"]
-NORMAL_IPS = ["192.168.1.10", "192.168.1.20", "10.0.0.50", "172.16.0.100", "192.168.0.5"]
-CONTAINERS = ["web-app", "api-server", "db-postgres", "redis-cache", "nginx-proxy"]
 
 def gen_timestamp():
-    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    """Generate current ISO-format timestamp."""
+    return datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
+
+def pick_ip(template):
+    """Choose malicious or normal IP based on log template context."""
+    threat_keywords = ["attack", "failed", "inject", "brute", "unauthorized",
+                       "exploit", "shell", "ddos", "breach", "stuffing",
+                       "traversal", "xss", "csrf", "ssrf", "rce",
+                       "escalation", "exfiltration", "smuggling", "bypass"]
+    lower = template.lower()
+    if any(kw in lower for kw in threat_keywords):
+        return random.choice(MALICIOUS_IPS)
+    return random.choice(NORMAL_IPS)
+
 
 def fill_template(template):
+    """Fill a log template with randomized realistic values."""
+    ip = pick_ip(template)
     return template.format(
         user=random.choice(USERS),
-        ip=random.choice(MALICIOUS_IPS if "attack" in template.lower() or "failed" in template.lower() or "inject" in template.lower() else NORMAL_IPS),
-        ms=random.randint(1, 500),
+        ip=ip,
+        ms=random.randint(1, 800),
         num=random.randint(1000, 9999),
-        attempt=random.randint(5, 50),
+        attempt=random.randint(5, 100),
         cpu=random.randint(10, 99),
         mem=random.randint(2000, 7500),
         pct=random.randint(30, 95),
@@ -83,7 +55,6 @@ def fill_template(template):
         rx=random.randint(100, 5000),
         tx=random.randint(50, 3000),
         pid=random.randint(1000, 65000),
-        container=random.choice(CONTAINERS),
         swap=random.randint(0, 2000),
         load1=round(random.uniform(0.1, 8.0), 2),
         load2=round(random.uniform(0.1, 6.0), 2),
@@ -91,43 +62,95 @@ def fill_template(template):
         node=random.randint(1, 5),
     )
 
-def write_log(filename, message):
-    filepath = os.path.join(LOG_DIR, filename)
-    line = f"{gen_timestamp()} {message}\n"
+
+def pick_severity(weights):
+    """Select severity level using weighted random distribution."""
+    levels = list(weights.keys())
+    w = list(weights.values())
+    return random.choices(levels, weights=w, k=1)[0]
+
+
+SEVERITY_LABEL_MAP = {
+    "low": "LOW",
+    "medium": "MEDIUM",
+    "high": "HIGH",
+    "critical": "CRITICAL",
+}
+
+
+def write_log(server, severity, message):
+    """
+    Write a structured JSON log line to the server's log file.
+    Format allows Filebeat to parse and forward metadata to Elasticsearch.
+    """
+    filepath = os.path.join(LOG_DIR, server["log_file"])
+    log_entry = {
+        "timestamp": gen_timestamp(),
+        "server_id": server["server_id"],
+        "server_name": server["name"],
+        "environment": server["environment"],
+        "severity": SEVERITY_LABEL_MAP[severity],
+        "message": message,
+    }
+    line = json.dumps(log_entry) + "\n"
     with open(filepath, "a") as f:
         f.write(line)
-    print(f"[{filename}] {line.strip()}")
+    print(f"[{server['name']}] [{SEVERITY_LABEL_MAP[severity]}] {message[:120]}")
+
+
+def server_loop(server):
+    """
+    Main loop for a single simulated server.
+    Generates logs continuously with weighted severity distribution.
+    """
+    print(f"  → Server '{server['name']}' ({server['server_id']}) started — env: {server['environment']}")
+    patterns = server["log_patterns"]
+    weights = server["severity_weights"]
+
+    # Initial burst of logs
+    for _ in range(random.randint(5, 10)):
+        severity = pick_severity(weights)
+        template = random.choice(patterns[severity])
+        write_log(server, severity, fill_template(template))
+
+    # Continuous generation
+    while True:
+        # Generate 1-4 logs per cycle
+        batch_size = random.randint(1, 4)
+        for _ in range(batch_size):
+            severity = pick_severity(weights)
+            template = random.choice(patterns[severity])
+            write_log(server, severity, fill_template(template))
+
+        # Random sleep between 2-8 seconds to simulate realistic spacing
+        time.sleep(random.uniform(2, 8))
+
 
 def main():
-    print("=== Log Generator Started ===")
-    print(f"Writing to: {LOG_DIR}")
-    
-    # Write initial burst
-    for _ in range(10):
-        write_log("app.log", fill_template(random.choice(NORMAL_LOGS)))
-    for _ in range(3):
-        write_log("system.log", fill_template(random.choice(SYSTEM_LOGS)))
-    print("Initial logs written. Starting continuous generation...\n")
+    print("=" * 60)
+    print("  Multi-Server Log Generator")
+    print(f"  Simulating {len(SERVERS)} servers")
+    print(f"  Output directory: {LOG_DIR}")
+    print("=" * 60)
 
-    cycle = 0
-    while True:
-        cycle += 1
+    # Ensure log directory exists
+    os.makedirs(LOG_DIR, exist_ok=True)
 
-        # Normal app logs (most frequent)
-        for _ in range(random.randint(2, 5)):
-            write_log("app.log", fill_template(random.choice(NORMAL_LOGS)))
+    # Start a thread for each simulated server
+    threads = []
+    for server in SERVERS:
+        t = threading.Thread(target=server_loop, args=(server,), daemon=True)
+        t.start()
+        threads.append(t)
 
-        # System logs
-        write_log("system.log", fill_template(random.choice(SYSTEM_LOGS)))
+    # Keep main thread alive
+    try:
+        while True:
+            time.sleep(60)
+            print(f"[Generator] All {len(SERVERS)} servers active — {gen_timestamp()}")
+    except KeyboardInterrupt:
+        print("\nLog generator shutting down...")
 
-        # Attack logs every ~3 cycles (simulating periodic attacks)
-        if cycle % 3 == 0:
-            count = random.randint(1, 3)
-            for _ in range(count):
-                write_log("attack.log", fill_template(random.choice(ATTACK_LOGS)))
-            print(f"  >> {count} ATTACK log(s) injected!")
-
-        time.sleep(random.uniform(2, 5))
 
 if __name__ == "__main__":
     main()
